@@ -543,6 +543,9 @@ void OBSBasicPreview::mousePressEvent(QMouseEvent *event)
 	if (altDown)
 		cropping = true;
 
+	if (ctrlDown && shiftDown)
+		cornerPinMode = true;
+
 	if (altDown || shiftDown || ctrlDown) {
 		vec2 s;
 		SceneFindBoxData data(s, s);
@@ -1385,6 +1388,80 @@ void OBSBasicPreview::CropItem(const vec2 &pos)
 	obs_sceneitem_defer_update_end(stretchItem);
 }
 
+
+void OBSBasicPreview::CornerPin(const vec2& pos)
+{
+	Qt::KeyboardModifiers modifiers = QGuiApplication::keyboardModifiers();
+	obs_bounds_type boundsType = obs_sceneitem_get_bounds_type(stretchItem);
+	uint32_t stretchFlags = (uint32_t)stretchHandle;
+	bool shiftDown = (modifiers & Qt::ShiftModifier);
+	bool ctrlDown = (modifiers & Qt::ControlModifier);
+	vec3 tl, br, pos3;
+
+	vec3_zero(&tl);
+	vec3_set(&br, stretchItemSize.x, stretchItemSize.y, 0.0f);
+
+	vec3_set(&pos3, pos.x, pos.y, 0.0f);
+	vec3_transform(&pos3, &pos3, &screenToItem);
+
+	if (stretchFlags & ITEM_LEFT)
+		tl.x = pos3.x;
+	else if (stretchFlags & ITEM_RIGHT)
+		br.x = pos3.x;
+
+	if (stretchFlags & ITEM_TOP)
+		tl.y = pos3.y;
+	else if (stretchFlags & ITEM_BOTTOM)
+		br.y = pos3.y;
+
+	if (!(modifiers & Qt::ControlModifier))
+		SnapStretchingToScreen(tl, br);
+
+	obs_source_t* source = obs_sceneitem_get_source(stretchItem);
+
+	vec2 baseSize;
+	vec2_set(&baseSize, float(obs_source_get_width(source)),
+		float(obs_source_get_height(source)));
+
+	vec2 size;
+	vec2_set(&size, br.x - tl.x, br.y - tl.y);
+
+	if (boundsType != OBS_BOUNDS_NONE) {
+		if (shiftDown)
+			ClampAspect(tl, br, size, baseSize);
+
+		if (tl.x > br.x)
+			std::swap(tl.x, br.x);
+		if (tl.y > br.y)
+			std::swap(tl.y, br.y);
+
+		vec2_abs(&size, &size);
+
+		obs_sceneitem_set_bounds(stretchItem, &size);
+	}
+	else {
+		obs_sceneitem_crop crop;
+		obs_sceneitem_get_crop(stretchItem, &crop);
+
+		baseSize.x -= float(crop.left + crop.right);
+		baseSize.y -= float(crop.top + crop.bottom);
+
+		if (!shiftDown)
+			ClampAspect(tl, br, size, baseSize);
+
+		vec2_div(&size, &size, &baseSize);
+		obs_sceneitem_set_scale(stretchItem, &size);
+	}
+
+	pos3 = CalculateStretchPos(tl, br);
+	vec3_transform(&pos3, &pos3, &itemToScreen);
+
+	vec2 newPos;
+	vec2_set(&newPos, std::round(pos3.x), std::round(pos3.y));
+	obs_sceneitem_set_pos(stretchItem, &newPos);
+}
+
+
 void OBSBasicPreview::StretchItem(const vec2 &pos)
 {
 	Qt::KeyboardModifiers modifiers = QGuiApplication::keyboardModifiers();
@@ -1507,6 +1584,8 @@ void OBSBasicPreview::mouseMoveEvent(QMouseEvent *event)
 
 			if (cropping)
 				CropItem(pos);
+			else if (cornerPinMode)
+				CornerPin(pos);
 			else
 				StretchItem(pos);
 

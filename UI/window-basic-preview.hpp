@@ -65,6 +65,7 @@ private:
 	bool scrollMode = false;
 	bool fixedScaling = false;
 	bool selectionBox = false;
+	bool cornerPinMode = false;
 	int32_t scalingLevel = 0;
 	float scalingAmount = 1.0f;
 
@@ -98,6 +99,7 @@ private:
 	void ClampAspect(vec3 &tl, vec3 &br, vec2 &size, const vec2 &baseSize);
 	vec3 CalculateStretchPos(const vec3 &tl, const vec3 &br);
 	void CropItem(const vec2 &pos);
+	void CornerPin(const vec2& pos);
 	void StretchItem(const vec2 &pos);
 
 	static void SnapItemMovement(vec2 &offset);
